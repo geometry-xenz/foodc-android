@@ -1,3 +1,11 @@
 <resources>
-    <string name="app_name">My Application</string>
+    <string name="app_name">Drishyam</string>
+    <string name="tagline">Computational Gastronomy &amp; Intelligent Nutrition</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_scan">Scan</string>
+    <string name="nav_pantry">Pantry</string>
+    <string name="nav_discover">Discover</string>
+    <string name="nav_nutrition">Nutrition</string>
+    <string name="scanner_title">DRISHYAM VISION</string>
+    <string name="deep_inspect_consent">Deep Inspect captures a single frame and transmits it securely to the DRISHYAM vision backend for molecular &amp; culinary identification.</string>
 </resources>
