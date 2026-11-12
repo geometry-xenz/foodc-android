@@ -7,10 +7,20 @@ import android.util.Base64
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 import java.security.KeyStore
+import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
-import javax.crypto.spec.GCMParameterSpec
+
+@Entity(tableName = "user_accounts")
+data class UserAccountEntity(
+    @PrimaryKey val email: String,
+    val userId: String,
+    val displayName: String,
+    val passwordHash: String,
+    val createdAtMs: Long,
+    val updatedAtMs: Long
+)
 
 @Entity(tableName = "pantry_items")
 data class PantryItemEntity(
@@ -29,6 +39,24 @@ data class PantryItemEntity(
     val lowStockThreshold: Double,
     val createdAtMs: Long,
     val updatedAtMs: Long
+)
+
+@Entity(tableName = "custom_recipes")
+data class CustomRecipeEntity(
+    @PrimaryKey val id: String,
+    val title: String,
+    val subtitle: String,
+    val cuisine: String,
+    val dietaryClassificationName: String,
+    val isDairyFree: Boolean,
+    val isGlutenFree: Boolean,
+    val isJainFriendly: Boolean,
+    val prepMinutes: Int,
+    val cookMinutes: Int,
+    val baseServings: Int,
+    val ingredientsSerialized: String, // canonical|display|qty|unit;...
+    val stepsSerialized: String,       // stepNum|instruction|seconds;...
+    val createdAtMs: Long
 )
 
 @Entity(tableName = "saved_recipes")
@@ -97,6 +125,15 @@ data class SyncOutboxEntity(
 )
 
 @Dao
+interface UserAccountDao {
+    @Query("SELECT * FROM user_accounts WHERE email = :email LIMIT 1")
+    suspend fun findByEmail(email: String): UserAccountEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(account: UserAccountEntity)
+}
+
+@Dao
 interface PantryDao {
     @Query("SELECT * FROM pantry_items ORDER BY updatedAtMs DESC")
     fun observeAll(): Flow<List<PantryItemEntity>>
@@ -111,6 +148,21 @@ interface PantryDao {
     suspend fun upsertAll(items: List<PantryItemEntity>)
 
     @Query("DELETE FROM pantry_items WHERE id = :id")
+    suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM pantry_items")
+    suspend fun clearAll()
+}
+
+@Dao
+interface CustomRecipeDao {
+    @Query("SELECT * FROM custom_recipes ORDER BY createdAtMs DESC")
+    fun observeAll(): Flow<List<CustomRecipeEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(recipe: CustomRecipeEntity)
+
+    @Query("DELETE FROM custom_recipes WHERE id = :id")
     suspend fun deleteById(id: String)
 }
 
@@ -160,6 +212,9 @@ interface PlannedMealDao {
 
     @Query("DELETE FROM planned_meals WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM planned_meals")
+    suspend fun clearAll()
 }
 
 @Dao
@@ -197,18 +252,22 @@ interface SyncOutboxDao {
 
 @Database(
     entities = [
+        UserAccountEntity::class,
         PantryItemEntity::class,
+        CustomRecipeEntity::class,
         SavedRecipeEntity::class,
         MealLogEntity::class,
         PlannedMealEntity::class,
         ShoppingItemEntity::class,
         SyncOutboxEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class DrishyamDatabase : RoomDatabase() {
+    abstract fun userAccountDao(): UserAccountDao
     abstract fun pantryDao(): PantryDao
+    abstract fun customRecipeDao(): CustomRecipeDao
     abstract fun savedRecipeDao(): SavedRecipeDao
     abstract fun mealLogDao(): MealLogDao
     abstract fun plannedMealDao(): PlannedMealDao
@@ -233,11 +292,19 @@ abstract class DrishyamDatabase : RoomDatabase() {
 
 /**
  * Android Keystore-backed AES-GCM encrypted credential vault (Part 6.2 & Part 26).
- * Never stores access tokens or refresh tokens in plain text.
+ * Never stores access tokens, refresh tokens, or passwords in plain text.
  */
 class KeystoreTokenVault(context: Context) {
     private val prefs = context.getSharedPreferences("drishyam_secure_vault", Context.MODE_PRIVATE)
     private val keyAlias = "drishyam_aes_master_key"
+
+    companion object {
+        fun sha256Hash(rawPassword: String, saltEmail: String): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            val bytes = digest.digest("${saltEmail.trim().lowercase()}:$rawPassword".toByteArray(Charsets.UTF_8))
+            return bytes.joinToString("") { "%02x".format(it) }
+        }
+    }
 
     private fun getOrCreateSecretKey(): SecretKey? {
         return try {
@@ -280,7 +347,7 @@ class KeystoreTokenVault(context: Context) {
                     .apply()
                 return
             } catch (_: Exception) {
-                // Fallback for JVM unit tests where AndroidKeyStore hardware provider is absent
+                // Fallback for headless JVM unit tests
             }
         }
         prefs.edit()

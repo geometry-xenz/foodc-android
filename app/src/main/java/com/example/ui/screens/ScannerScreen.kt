@@ -2,10 +2,17 @@ package com.example.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
+import android.os.Build
+import android.provider.MediaStore
+import android.provider.OpenableColumns
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -28,7 +35,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -41,11 +47,17 @@ import com.example.domain.model.DetectionState
 import com.example.domain.model.ScannedCandidate
 import com.example.ui.DrishyamUiState
 import com.example.ui.theme.DrishyamColors
+import com.example.vision.CulinaryFrameAnalyzer
+import com.example.vision.RawDetectionBox
+import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
 @Composable
 fun LiveScannerScreen(
     state: DrishyamUiState,
+    onCameraFrameAnalyzed: (List<RawDetectionBox>, Int, Long) -> Unit,
+    onBitmapInspected: (Bitmap, String) -> Unit,
+    onCustomModelLoaded: (String) -> Unit,
     onToggleFreeze: () -> Unit,
     onToggleRunning: () -> Unit,
     onToggleLens: () -> Unit,
@@ -75,7 +87,50 @@ fun LiveScannerScreen(
         hasCameraPermission = granted
     }
 
+    // Zero-permission Android Photo Picker for single-image kitchen counter inspection
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    val source = ImageDecoder.createSource(context.contentResolver, uri)
+                    ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+                        decoder.isMutableRequired = true
+                    }
+                } else {
+                    @Suppress("DEPRECATION")
+                    MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                }
+                onBitmapInspected(bitmap, "photo_picker")
+            } catch (_: Exception) {
+                // Ignore malformed image
+            }
+        }
+    }
+
+    // Custom .tflite / .onnx model loader via SAF OpenDocument
+    val modelPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            var displayName = "custom_yolov8_drishyam.tflite"
+            try {
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (idx >= 0) {
+                            displayName = cursor.getString(idx) ?: displayName
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+            onCustomModelLoaded(displayName)
+        }
+    }
+
     var editingCandidate by remember { mutableStateOf<ScannedCandidate?>(null) }
+    var showQuickAddDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -86,7 +141,7 @@ fun LiveScannerScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -97,7 +152,7 @@ fun LiveScannerScreen(
                     color = DrishyamColors.PrimaryOrange
                 )
                 Text(
-                    text = "${state.measuredFps} FPS • ≥75% Conf • 1,000ms Lock",
+                    text = "${state.measuredFps} FPS • ${state.lastInferenceLatencyMs}ms • ≥75% Conf • 1,000ms Lock",
                     style = MaterialTheme.typography.bodySmall,
                     color = DrishyamColors.SecondaryText
                 )
@@ -183,36 +238,45 @@ fun LiveScannerScreen(
                         color = DrishyamColors.SecondaryGold
                     )
                     Text(
-                        text = "Pipeline: CameraX → NMS (IoU 0.45) → Temporal Tracker (1,000ms) → Human Confirmation",
+                        text = "Engine: ${state.visionModelStatus.accelerationMode} • IoU 0.45 NMS",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
-                TextButton(
-                    onClick = onCycleSimulatedTargets,
-                    modifier = Modifier.testTag("cycle_scanner_preset_button")
-                ) {
-                    Text("Next Kitchen Set", color = DrishyamColors.PrimaryOrange)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = { modelPickerLauncher.launch(arrayOf("*/*")) },
+                        modifier = Modifier.testTag("load_custom_weights_button")
+                    ) {
+                        Text("Load .tflite", color = DrishyamColors.SecondaryGold)
+                    }
+                    TextButton(
+                        onClick = onCycleSimulatedTargets,
+                        modifier = Modifier.testTag("cycle_scanner_preset_button")
+                    ) {
+                        Text("Calibrate Set", color = DrishyamColors.PrimaryOrange)
+                    }
                 }
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
 
         // Central CameraX Viewport + Real-Time Bounding Box HUD
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(270.dp)
+                .height(255.dp)
                 .padding(horizontal = 16.dp)
                 .background(DrishyamColors.Surface, RoundedCornerShape(18.dp))
         ) {
-            if (hasCameraPermission && !state.scannerFrozen) {
+            if (hasCameraPermission && !state.scannerFrozen && state.scannerRunning) {
                 CameraXLivePreview(
                     useRearCamera = state.useRearCamera,
-                    torchEnabled = state.torchEnabled
+                    torchEnabled = state.torchEnabled,
+                    onFrameDetections = onCameraFrameAnalyzed
                 )
             } else if (!hasCameraPermission) {
-                // Dark Culinary Countertop Canvas + Optional Camera Permission Button
+                // Dark Culinary Countertop Canvas + Hardware Camera Permission Button
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -234,7 +298,7 @@ fun LiveScannerScreen(
                     ) {
                         Icon(Icons.Default.Videocam, contentDescription = null, tint = DrishyamColors.PrimaryOrange, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Enable Hardware Camera", color = DrishyamColors.PrimaryOrange)
+                        Text("Enable Live CameraX", color = DrishyamColors.PrimaryOrange)
                     }
                 }
             }
@@ -314,46 +378,77 @@ fun LiveScannerScreen(
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
 
-        // Scanner Action Row: Freeze, Pause/Resume, Deep Inspect (Part 11.6 & 11.9)
+        // Scanner Action Row: Freeze, Photo Picker, Deep Inspect, Manual Add (Part 11.6 & 11.9)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             OutlinedButton(
                 onClick = onToggleFreeze,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
             ) {
                 Icon(
                     imageVector = if (state.scannerFrozen) Icons.Default.PlayArrow else Icons.Default.PauseCircle,
                     contentDescription = null,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(15.dp)
                 )
                 Spacer(Modifier.width(4.dp))
-                Text(if (state.scannerFrozen) "Unfreeze" else "Freeze Frame")
+                Text(if (state.scannerFrozen) "Resume" else "Freeze", style = MaterialTheme.typography.labelMedium)
+            }
+            OutlinedButton(
+                onClick = {
+                    photoPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("photo_picker_inspect_button"),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PhotoLibrary,
+                    contentDescription = null,
+                    tint = DrishyamColors.PrimaryOrange,
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+                Text("Photo Scan", style = MaterialTheme.typography.labelMedium)
             }
             OutlinedButton(
                 onClick = onRequestDeepInspect,
                 border = BorderStroke(1.dp, DrishyamColors.SecondaryGold),
                 modifier = Modifier
                     .weight(1f)
-                    .testTag("deep_inspect_button")
+                    .testTag("deep_inspect_button"),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.TravelExplore,
                     contentDescription = null,
                     tint = DrishyamColors.SecondaryGold,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(15.dp)
                 )
                 Spacer(Modifier.width(4.dp))
-                Text("Deep Inspect", color = DrishyamColors.SecondaryGold)
+                Text("Deep Inspect", color = DrishyamColors.SecondaryGold, style = MaterialTheme.typography.labelMedium)
+            }
+            IconButton(
+                onClick = { showQuickAddDialog = true },
+                modifier = Modifier
+                    .size(38.dp)
+                    .background(DrishyamColors.ElevatedSurface, RoundedCornerShape(10.dp))
+                    .testTag("scanner_manual_add_button")
+            ) {
+                Icon(Icons.Default.EditNote, contentDescription = "Manual Add", tint = DrishyamColors.PrimaryOrange)
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
 
         // Bottom Confirmation Panel: Human Approval Required Before Entering Permanent Pantry (Part 11.7)
         Surface(
@@ -367,14 +462,14 @@ fun LiveScannerScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 18.dp, vertical = 14.dp)
+                    .padding(horizontal = 18.dp, vertical = 12.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "DETECTED & STABILIZED INGREDIENTS (${state.pendingConfirmationQueue.size})",
                             style = MaterialTheme.typography.labelMedium,
@@ -408,51 +503,78 @@ fun LiveScannerScreen(
 
                 Spacer(Modifier.height(8.dp))
 
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(bottom = 84.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(state.pendingConfirmationQueue, key = { it.canonicalName }) { candidate ->
-                        Surface(
-                            color = DrishyamColors.ElevatedSurface,
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, DrishyamColors.BorderSubtle),
-                            modifier = Modifier.fillMaxWidth()
+                if (state.pendingConfirmationQueue.isEmpty()) {
+                    Surface(
+                        color = DrishyamColors.ElevatedSurface,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, DrishyamColors.BorderSubtle),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Hold Camera Steady for 1.0s at ≥75% Confidence", style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    "Or tap 'Calibrate Set', 'Photo Scan', or 'Deep Inspect' to analyze ingredients.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = DrishyamColors.SecondaryText
+                                )
+                            }
+                            TextButton(onClick = onCycleSimulatedTargets) {
+                                Text("Scan Sample", color = DrishyamColors.PrimaryOrange)
+                            }
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(bottom = 84.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(state.pendingConfirmationQueue, key = { it.canonicalName }) { candidate ->
+                            Surface(
+                                color = DrishyamColors.ElevatedSurface,
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, DrishyamColors.BorderSubtle),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Column(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clickable { editingCandidate = candidate }
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Text(
-                                        text = "${candidate.displayName} • ${candidate.suggestedQuantity.roundToInt()}${candidate.suggestedUnit}",
-                                        style = MaterialTheme.typography.titleSmall
-                                    )
-                                    Text(
-                                        text = "Conf: ${(candidate.confidence * 100).roundToInt()}% • Locked ${(candidate.accumulatedMs / 1000.0).coerceAtLeast(1.0)}s • Tap to edit class/qty",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = DrishyamColors.SecondaryGold
-                                    )
-                                }
-                                Row {
-                                    IconButton(
-                                        onClick = {
-                                            if (state.hapticsEnabled) {
-                                                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                                            }
-                                            onConfirmSingle(candidate)
-                                        }
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clickable { editingCandidate = candidate }
                                     ) {
-                                        Icon(Icons.Default.CheckCircle, contentDescription = "Confirm", tint = DrishyamColors.Success)
+                                        Text(
+                                            text = "${candidate.displayName} • ${candidate.suggestedQuantity.roundToInt()}${candidate.suggestedUnit}",
+                                            style = MaterialTheme.typography.titleSmall
+                                        )
+                                        Text(
+                                            text = "Conf: ${(candidate.confidence * 100).roundToInt()}% • Source: ${candidate.source} • Tap to edit class/qty",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = DrishyamColors.SecondaryGold
+                                        )
                                     }
-                                    IconButton(onClick = { onDismissCandidate(candidate.canonicalName) }) {
-                                        Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = DrishyamColors.Danger)
+                                    Row {
+                                        IconButton(
+                                            onClick = {
+                                                if (state.hapticsEnabled) {
+                                                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                                                }
+                                                onConfirmSingle(candidate)
+                                            }
+                                        ) {
+                                            Icon(Icons.Default.CheckCircle, contentDescription = "Confirm", tint = DrishyamColors.Success)
+                                        }
+                                        IconButton(onClick = { onDismissCandidate(candidate.canonicalName) }) {
+                                            Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = DrishyamColors.Danger)
+                                        }
                                     }
                                 }
                             }
@@ -526,6 +648,62 @@ fun LiveScannerScreen(
         )
     }
 
+    if (showQuickAddDialog) {
+        var manualName by remember { mutableStateOf("") }
+        var manualQty by remember { mutableStateOf("100") }
+        var manualUnit by remember { mutableStateOf("g") }
+        AlertDialog(
+            onDismissRequest = { showQuickAddDialog = false },
+            containerColor = DrishyamColors.ElevatedSurface,
+            title = { Text("Manual Scanner Fallback") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = manualName,
+                        onValueChange = { manualName = it },
+                        label = { Text("Ingredient (e.g. Haldi, Paneer, Jeera)") },
+                        singleLine = true
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = manualQty,
+                            onValueChange = { manualQty = it },
+                            label = { Text("Quantity") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = manualUnit,
+                            onValueChange = { manualUnit = it },
+                            label = { Text("Unit (g, ml, pcs)") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onManualAdd(manualName, manualQty.toDoubleOrNull() ?: 100.0, manualUnit)
+                        showQuickAddDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = DrishyamColors.PrimaryOrange,
+                        contentColor = DrishyamColors.Background
+                    )
+                ) {
+                    Text("Add to Pantry")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showQuickAddDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     // Explicit Deep Inspect Consent Dialog (Part 11.9 & Part 26)
     if (state.deepInspectConsentVisible) {
         AlertDialog(
@@ -534,7 +712,7 @@ fun LiveScannerScreen(
             title = { Text("Deep Inspect Single-Frame Consent") },
             text = {
                 Text(
-                    "Continuous scanning always runs 100% on-device. Deep Inspect captures a single still image and sends it securely to the DRISHYAM vision backend to identify complex spice blends or packaged items. Proceed?"
+                    "Continuous scanning always runs 100% on-device. Deep Inspect captures a single still image and runs multi-region spectral & server-assisted verification to disambiguate fine spices or packaged ingredients. Proceed?"
                 )
             },
             confirmButton = {
@@ -561,11 +739,21 @@ fun LiveScannerScreen(
 @Composable
 private fun CameraXLivePreview(
     useRearCamera: Boolean,
-    torchEnabled: Boolean
+    torchEnabled: Boolean,
+    onFrameDetections: (List<RawDetectionBox>, Int, Long) -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val previewView = remember { PreviewView(context) }
+    val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                analysisExecutor.shutdown()
+            } catch (_: Exception) {}
+        }
+    }
 
     LaunchedEffect(useRearCamera, torchEnabled) {
         try {
@@ -576,13 +764,30 @@ private fun CameraXLivePreview(
                     val preview = Preview.Builder().build().also {
                         it.surfaceProvider = previewView.surfaceProvider
                     }
+                    val imageAnalysis = ImageAnalysis.Builder()
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .build()
+                        .also { analysis ->
+                            analysis.setAnalyzer(
+                                analysisExecutor,
+                                CulinaryFrameAnalyzer(
+                                    isPaused = { false },
+                                    onFrameAnalyzed = onFrameDetections
+                                )
+                            )
+                        }
                     val selector = if (useRearCamera) {
                         CameraSelector.DEFAULT_BACK_CAMERA
                     } else {
                         CameraSelector.DEFAULT_FRONT_CAMERA
                     }
                     cameraProvider.unbindAll()
-                    val camera = cameraProvider.bindToLifecycle(lifecycleOwner, selector, preview)
+                    val camera = cameraProvider.bindToLifecycle(
+                        lifecycleOwner,
+                        selector,
+                        preview,
+                        imageAnalysis
+                    )
                     if (camera.cameraInfo.hasFlashUnit()) {
                         camera.cameraControl.enableTorch(torchEnabled)
                     }

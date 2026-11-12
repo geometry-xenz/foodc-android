@@ -4,13 +4,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -23,14 +21,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.data.FoodoscopeSeedCatalog
 import com.example.domain.model.*
+import com.example.domain.usecase.IngredientAliasNormalizer
 import com.example.ui.DrishyamUiState
-import com.example.ui.SubScreen
 import com.example.ui.theme.DrishyamColors
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -51,6 +47,7 @@ fun FlavourScienceScreen(
         ?: allProfiles.first()
     val selectedCompound = currentProfile.keyCompounds.find { it.id == state.selectedCompoundId }
         ?: currentProfile.keyCompounds.firstOrNull()
+    val currentMeta = IngredientAliasNormalizer.resolve(currentProfile.canonicalName)
 
     LazyColumn(
         modifier = Modifier
@@ -119,7 +116,7 @@ fun FlavourScienceScreen(
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Text(
-                                text = "Verified FlavorDB Aroma Compound Network",
+                                text = "IFCT: ${currentMeta.nutrientPer100g.caloriesPer100g} kcal/100g • P: ${currentMeta.nutrientPer100g.proteinPer100g}g • C: ${currentMeta.nutrientPer100g.carbsPer100g}g",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = DrishyamColors.SecondaryGold
                             )
@@ -357,6 +354,10 @@ fun NutritionDashboardScreen(
     val totalSugar = logs.sumOf { it.sugarG }
     val totalSatFat = logs.sumOf { it.saturatedFatG }
     val totalSodium = logs.sumOf { it.sodiumMg }
+    val totalIron = logs.sumOf { it.ironMg }
+    val totalCalcium = logs.sumOf { it.calciumMg }
+    val totalVitC = logs.sumOf { it.vitaminCMg }
+    val totalPotassium = logs.sumOf { it.potassiumMg }
 
     LazyColumn(
         modifier = Modifier
@@ -485,11 +486,17 @@ fun NutritionDashboardScreen(
                     Text("MICRONUTRIENTS & LIPID/SODIUM TELEMETRY", style = MaterialTheme.typography.labelMedium, color = DrishyamColors.SecondaryGold)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("Sugar: ${totalSugar.roundToInt()}g", style = MaterialTheme.typography.bodyMedium)
-                        Text("Saturated Fat: ${totalSatFat.roundToInt()}g", style = MaterialTheme.typography.bodyMedium)
+                        Text("Sat Fat: ${totalSatFat.roundToInt()}g", style = MaterialTheme.typography.bodyMedium)
                         Text("Sodium: ${totalSodium}mg", style = MaterialTheme.typography.bodyMedium)
                     }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Iron: ${(totalIron * 10).roundToInt() / 10.0}mg", style = MaterialTheme.typography.bodySmall, color = DrishyamColors.Success)
+                        Text("Calcium: ${totalCalcium}mg", style = MaterialTheme.typography.bodySmall, color = DrishyamColors.Success)
+                        Text("Vit C: ${(totalVitC * 10).roundToInt() / 10.0}mg", style = MaterialTheme.typography.bodySmall, color = DrishyamColors.Success)
+                        Text("Potassium: ${totalPotassium}mg", style = MaterialTheme.typography.bodySmall, color = DrishyamColors.Success)
+                    }
                     Text(
-                        text = "Values aggregated from Foodoscope RecipeDB / IFCT ingredient quantities vs. user estimates.",
+                        text = "Values dynamically aggregated from IFCT 2017 / USDA per-100g ingredient compositions vs. user estimates.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
@@ -510,32 +517,55 @@ fun NutritionDashboardScreen(
             }
         }
 
-        items(logs, key = { it.id }) { log ->
-            Surface(
-                color = DrishyamColors.Surface,
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, DrishyamColors.BorderSubtle),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+        if (logs.isEmpty()) {
+            item {
+                Surface(
+                    color = DrishyamColors.Surface,
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, DrishyamColors.BorderSubtle),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("No Meals Logged Yet Today", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            text = "${log.mealSlot.label.uppercase()} • ${log.dateIso} • ${log.sourceLabel}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = DrishyamColors.SecondaryGold
-                        )
-                        Text(log.title, style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            text = "${log.servings} srv • ${log.calories} kcal • P: ${log.proteinG}g • C: ${log.carbsG}g • F: ${log.fatG}g • Fibre: ${log.fibreG}g",
-                            style = MaterialTheme.typography.bodySmall
+                            "Complete any recipe in Interactive Cooking Mode or tap 'Log Meal' above to record your real intake.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = DrishyamColors.SecondaryText
                         )
                     }
-                    IconButton(onClick = { onDeleteMealLog(log.id) }) {
-                        Icon(Icons.Outlined.Delete, contentDescription = "Delete Meal Log", tint = DrishyamColors.Danger)
+                }
+            }
+        } else {
+            items(logs, key = { it.id }) { log ->
+                Surface(
+                    color = DrishyamColors.Surface,
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, DrishyamColors.BorderSubtle),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "${log.mealSlot.label.uppercase()} • ${log.dateIso} • ${log.sourceLabel}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = DrishyamColors.SecondaryGold
+                            )
+                            Text(log.title, style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                text = "${log.servings} srv • ${log.calories} kcal • P: ${log.proteinG}g • C: ${log.carbsG}g • F: ${log.fatG}g • Fibre: ${log.fibreG}g",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        IconButton(onClick = { onDeleteMealLog(log.id) }) {
+                            Icon(Icons.Outlined.Delete, contentDescription = "Delete Meal Log", tint = DrishyamColors.Danger)
+                        }
                     }
                 }
             }

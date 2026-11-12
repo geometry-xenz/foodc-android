@@ -59,7 +59,7 @@ fun DrishyamAppRoot(
         containerColor = DrishyamColors.Background,
         contentWindowInsets = WindowInsets.safeDrawing,
         bottomBar = {
-            if (state.activeSubScreen != SubScreen.COOKING_MODE) {
+            if (state.activeSubScreen != SubScreen.COOKING_MODE && state.activeSubScreen != SubScreen.ONBOARDING_WIZARD) {
                 DrishyamBottomBar(
                     activeTab = state.activeTab,
                     onSelectTab = { viewModel.selectTab(it) }
@@ -73,6 +73,14 @@ fun DrishyamAppRoot(
                 .padding(innerPadding)
         ) {
             when (state.activeSubScreen) {
+                SubScreen.ONBOARDING_WIZARD -> {
+                    OnboardingWizardScreen(
+                        state = state,
+                        onSetStep = { viewModel.setOnboardingStep(it) },
+                        onUpdateProfile = { viewModel.updateProfile(it) },
+                        onCompleteOnboarding = { viewModel.completeOnboarding() }
+                    )
+                }
                 SubScreen.RECIPE_DETAIL -> {
                     RecipeDetailScreen(
                         state = state,
@@ -117,7 +125,8 @@ fun DrishyamAppRoot(
                         onGenerateShoppingList = {
                             viewModel.generateShoppingFromMissingAndLowStock()
                             viewModel.openSubScreen(SubScreen.SHOPPING_LIST)
-                        }
+                        },
+                        onGenerateAutoWeeklyPlan = { viewModel.generateAutoWeeklyMealPlan() }
                     )
                 }
                 SubScreen.SHOPPING_LIST -> {
@@ -130,20 +139,26 @@ fun DrishyamAppRoot(
                         onClearPurchased = { viewModel.clearPurchasedShopping() }
                     )
                 }
-                SubScreen.PROFILE_AND_GOALS, SubScreen.ONBOARDING_WIZARD -> {
+                SubScreen.PROFILE_AND_GOALS -> {
                     ProfileAndGoalsScreen(
                         state = state,
                         onBack = { viewModel.navigateBack() },
                         onUpdateProfile = { viewModel.updateProfile(it) },
-                        onOpenAuthOrSync = { viewModel.openSubScreen(SubScreen.SETTINGS_AND_SYNC) }
+                        onOpenAuthOrSync = { viewModel.openSubScreen(SubScreen.SETTINGS_AND_SYNC) },
+                        onOpenOnboardingWizard = {
+                            viewModel.setOnboardingStep(0)
+                            viewModel.openSubScreen(SubScreen.ONBOARDING_WIZARD)
+                        }
                     )
                 }
                 SubScreen.SETTINGS_AND_SYNC, SubScreen.AUTH_PORTAL -> {
                     SettingsAndSyncScreen(
                         state = state,
                         onBack = { viewModel.navigateBack() },
+                        onSetAuthStep = { viewModel.setAuthFlowStep(it) },
                         onUpdateBackendUrlAndSync = { viewModel.updateBackendUrlAndSync(it) },
                         onLoginOrRegister = { email, pass, name -> viewModel.loginOrRegister(email, pass, name) },
+                        onResetPassword = { email, newPass -> viewModel.resetPassword(email, newPass) },
                         onLogout = { viewModel.logout() }
                     )
                 }
@@ -161,6 +176,15 @@ fun DrishyamAppRoot(
                         )
                         PrimaryTab.SCAN -> LiveScannerScreen(
                             state = state,
+                            onCameraFrameAnalyzed = { boxes, fps, latency ->
+                                viewModel.onCameraFrameAnalyzed(boxes, fps, latency)
+                            },
+                            onBitmapInspected = { bmp, source ->
+                                viewModel.onBitmapInspected(bmp, source)
+                            },
+                            onCustomModelLoaded = { fileName ->
+                                viewModel.onCustomModelLoaded(fileName)
+                            },
                             onToggleFreeze = { viewModel.toggleScannerFreeze() },
                             onToggleRunning = { viewModel.toggleScannerRunning() },
                             onToggleLens = { viewModel.toggleCameraLens() },
@@ -185,12 +209,20 @@ fun DrishyamAppRoot(
                             onCategorySelect = { viewModel.setPantryCategoryFilter(it) },
                             onAddOrUpdateItem = { name, qty, unit -> viewModel.addOrUpdatePantryManual(name, qty, unit) },
                             onDeleteItem = { viewModel.deletePantryItem(it) },
-                            onOpenScanner = { viewModel.selectTab(PrimaryTab.SCAN) }
+                            onOpenScanner = { viewModel.selectTab(PrimaryTab.SCAN) },
+                            onInspectFlavourScience = { canonical ->
+                                viewModel.selectFlavourIngredient(canonical)
+                                viewModel.openSubScreen(SubScreen.FLAVOUR_SCIENCE)
+                            }
                         )
                         PrimaryTab.DISCOVER -> DiscoverRecipesScreen(
                             state = state,
                             onSearchChange = { viewModel.setRecipeSearchQuery(it) },
                             onCuisineSelect = { viewModel.setCuisineFilter(it) },
+                            onToggleShowSavedOnly = { viewModel.toggleShowSavedOnly() },
+                            onCreateCustomRecipe = { title, sub, cuisine, prep, cook, srv, ings, steps, utensils ->
+                                viewModel.createCustomRecipe(title, sub, cuisine, prep, cook, srv, ings, steps, utensils)
+                            },
                             onOpenRecipe = { viewModel.openRecipeDetail(it) },
                             onOpenFlavourScience = { viewModel.openSubScreen(SubScreen.FLAVOUR_SCIENCE) }
                         )

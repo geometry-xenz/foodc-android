@@ -27,11 +27,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.domain.model.*
+import com.example.domain.usecase.IngredientAliasNormalizer
 import com.example.ui.DrishyamUiState
 import com.example.ui.PrimaryTab
 import com.example.ui.SubScreen
@@ -217,6 +217,14 @@ fun HomeDashboardScreen(
                     onClick = { onOpenSubScreen(SubScreen.SHOPPING_LIST) }
                 )
                 QuickModulePill(
+                    icon = Icons.Default.Tune,
+                    title = "8-Step Wizard",
+                    subtitle = "Calibrate Profile",
+                    accent = DrishyamColors.PrimaryOrange,
+                    tag = "quick_onboarding_wizard",
+                    onClick = { onOpenSubScreen(SubScreen.ONBOARDING_WIZARD) }
+                )
+                QuickModulePill(
                     icon = Icons.Default.FitnessCenter,
                     title = "Goals & Diet",
                     subtitle = state.userProfile.primaryGoal.title,
@@ -227,7 +235,7 @@ fun HomeDashboardScreen(
                 QuickModulePill(
                     icon = Icons.Default.SyncLock,
                     title = "Cloud & Auth",
-                    subtitle = "Cross-Platform",
+                    subtitle = if (state.isAuthenticated) "Session Active" else "Sign In",
                     accent = DrishyamColors.SecondaryGold,
                     tag = "quick_cloud_sync",
                     onClick = { onOpenSubScreen(SubScreen.SETTINGS_AND_SYNC) }
@@ -627,10 +635,12 @@ fun PantryScreen(
     onCategorySelect: (IngredientCategory?) -> Unit,
     onAddOrUpdateItem: (String, Double, String) -> Unit,
     onDeleteItem: (String) -> Unit,
-    onOpenScanner: () -> Unit
+    onOpenScanner: () -> Unit,
+    onInspectFlavourScience: (String) -> Unit = {}
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
     var editingItem by remember { mutableStateOf<PantryItem?>(null) }
+    var inspectedItem by remember { mutableStateOf<PantryItem?>(null) }
 
     val filteredItems = state.pantryItems.filter { item ->
         val matchesCategory = state.pantryCategoryFilter == null || item.category == state.pantryCategoryFilter
@@ -730,6 +740,14 @@ fun PantryScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(filteredItems, key = { it.id }) { item ->
+                val meta = IngredientAliasNormalizer.resolve(item.canonicalName)
+                val grams = IngredientAliasNormalizer.normalizeQuantityToGrams(
+                    item.quantity,
+                    item.unit,
+                    meta.nutrientPer100g.gramsPerPiece
+                )
+                val itemCalories = (meta.nutrientPer100g.caloriesPer100g * grams / 100.0).roundToInt()
+
                 Surface(
                     color = DrishyamColors.Surface,
                     shape = RoundedCornerShape(14.dp),
@@ -739,10 +757,7 @@ fun PantryScreen(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable {
-                            editingItem = item
-                            showAddDialog = true
-                        }
+                        .clickable { inspectedItem = item }
                 ) {
                     Row(
                         modifier = Modifier.padding(14.dp),
@@ -779,7 +794,7 @@ fun PantryScreen(
                             }
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                text = "Source: ${item.source} • Confidence: ${(item.confidence * 100).roundToInt()}% • Aliases: ${item.aliases.joinToString(", ").ifEmpty { "Canonical" }}",
+                                text = "IFCT: ${meta.nutrientPer100g.caloriesPer100g} kcal/100g (~$itemCalories kcal total) • Aliases: ${item.aliases.joinToString(", ").ifEmpty { "Canonical" }}",
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
@@ -790,6 +805,18 @@ fun PantryScreen(
                                 style = MaterialTheme.typography.labelLarge,
                                 color = DrishyamColors.PrimaryOrange
                             )
+                            IconButton(
+                                onClick = {
+                                    editingItem = item
+                                    showAddDialog = true
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Edit,
+                                    contentDescription = "Edit ${item.displayName}",
+                                    tint = DrishyamColors.SecondaryGold
+                                )
+                            }
                             IconButton(onClick = { onDeleteItem(item.id) }) {
                                 Icon(
                                     imageVector = Icons.Outlined.Delete,
@@ -802,6 +829,85 @@ fun PantryScreen(
                 }
             }
         }
+    }
+
+    // Ingredient Details Sheet / Dialog (IFCT/USDA Per-100g Telemetry + Aliases + FlavorDB Jump)
+    inspectedItem?.let { item ->
+        val meta = IngredientAliasNormalizer.resolve(item.canonicalName)
+        val n100 = meta.nutrientPer100g
+        val grams = IngredientAliasNormalizer.normalizeQuantityToGrams(item.quantity, item.unit, n100.gramsPerPiece)
+        AlertDialog(
+            onDismissRequest = { inspectedItem = null },
+            containerColor = DrishyamColors.ElevatedSurface,
+            title = {
+                Column {
+                    Text("${item.displayName} (${item.category.label})", style = MaterialTheme.typography.headlineMedium)
+                    Text(
+                        "Canonical ID: ${item.canonicalName} • Stock: ${item.quantity.roundToInt()} ${item.unit} (~${grams.roundToInt()}g)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = DrishyamColors.PrimaryOrange
+                    )
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "IFCT / USDA Per-100g Composition:",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = DrishyamColors.SecondaryGold
+                    )
+                    Text(
+                        "• Energy: ${n100.caloriesPer100g} kcal | Protein: ${n100.proteinPer100g}g | Carbs: ${n100.carbsPer100g}g | Fat: ${n100.fatPer100g}g",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        "• Fibre: ${n100.fibrePer100g}g | Sugar: ${n100.sugarPer100g}g | Sat Fat: ${n100.saturatedFatPer100g}g",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        "• Micronutrients: Iron ${n100.ironMgPer100g}mg • Calcium ${n100.calciumMgPer100g}mg • Vit C ${n100.vitaminCMgPer100g}mg • Potassium ${n100.potassiumMgPer100g}mg",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = DrishyamColors.Success
+                    )
+                    HorizontalDivider(color = DrishyamColors.BorderSubtle)
+                    Text(
+                        "Recognized Regional Aliases: ${meta.aliases.joinToString(", ")}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        "Detection Source: ${item.source} (${(item.confidence * 100).roundToInt()}% confidence)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = DrishyamColors.SecondaryText
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val canonical = item.canonicalName
+                        inspectedItem = null
+                        onInspectFlavourScience(canonical)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = DrishyamColors.SecondaryGold,
+                        contentColor = DrishyamColors.Background
+                    )
+                ) {
+                    Text("Inspect FlavorDB Molecules")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        editingItem = item
+                        inspectedItem = null
+                        showAddDialog = true
+                    }
+                ) {
+                    Text("Edit Quantity")
+                }
+            }
+        )
     }
 
     if (showAddDialog) {

@@ -5,9 +5,9 @@ import com.example.domain.usecase.IngredientAliasNormalizer
 import kotlin.math.roundToInt
 
 /**
- * Curated Foodoscope RecipeDB & FlavorDB molecular gastronomy dataset
- * providing verified aroma compounds, botanical families, chemical bridges,
- * and complete Indian & global recipes with USDA/IFCT nutritional profiles.
+ * Authoritative Foodoscope RecipeDB & FlavorDB molecular gastronomy dataset.
+ * All recipe macro and micronutrient profiles are dynamically computed from
+ * their exact ingredient weights via [IngredientAliasNormalizer.calculateRecipeNutritionFromIngredients].
  */
 object FoodoscopeSeedCatalog {
 
@@ -315,8 +315,59 @@ object FoodoscopeSeedCatalog {
             .take(5)
     }
 
+    private fun buildRecipeWithCalculatedNutrition(
+        id: String,
+        title: String,
+        subtitle: String,
+        cuisine: String,
+        mealTypes: List<String>,
+        dietaryClassification: DietaryLifestyle,
+        isDairyFree: Boolean,
+        isGlutenFree: Boolean,
+        isJainFriendly: Boolean,
+        prepMinutes: Int,
+        cookMinutes: Int,
+        difficulty: String,
+        baseServings: Int,
+        requiredUtensils: List<String>,
+        tasteTags: List<String>,
+        drawableResName: String,
+        ingredients: List<RecipeIngredient>,
+        steps: List<RecipeStep>,
+        dominantCompounds: List<String>,
+        flavourPairingNote: String
+    ): Recipe {
+        val calculatedNutrition = IngredientAliasNormalizer.calculateRecipeNutritionFromIngredients(
+            ingredients = ingredients,
+            baseServings = baseServings
+        )
+        return Recipe(
+            id = id,
+            title = title,
+            subtitle = subtitle,
+            cuisine = cuisine,
+            mealTypes = mealTypes,
+            dietaryClassification = dietaryClassification,
+            isDairyFree = isDairyFree,
+            isGlutenFree = isGlutenFree,
+            isJainFriendly = isJainFriendly,
+            prepMinutes = prepMinutes,
+            cookMinutes = cookMinutes,
+            difficulty = difficulty,
+            baseServings = baseServings,
+            requiredUtensils = requiredUtensils,
+            tasteTags = tasteTags,
+            drawableResName = drawableResName,
+            ingredients = ingredients,
+            steps = steps,
+            nutritionPerServing = calculatedNutrition,
+            dominantCompounds = dominantCompounds,
+            flavourPairingNote = flavourPairingNote
+        )
+    }
+
     val recipes: List<Recipe> = listOf(
-        Recipe(
+        buildRecipeWithCalculatedNutrition(
             id = "rcp_paneer_tikka",
             title = "Smoky Tandoori Paneer Tikka",
             subtitle = "High-protein yogurt-marinated cottage cheese charred with bell peppers, onion, and toasted cumin-ajwain aromatics",
@@ -350,7 +401,7 @@ object FoodoscopeSeedCatalog {
                     1,
                     "Whisk thick yogurt with turmeric powder, red chilli powder, garam masala, minced ginger-garlic, and lemon juice until velvety.",
                     durationSeconds = 180,
-                    highlightedIngredients = listOf("Yogurt", "Turmeric Powder", "Red Chilli Powder", "Garam Masala"),
+                    highlightedIngredients = listOf("Greek / Plain Yogurt", "Turmeric Powder", "Red Chilli Powder", "Garam Masala"),
                     scientificTip = "Lactic acid in yogurt denatures surface proteins gently while dairy lactones dissolve fat-soluble curcuminoids and capsaicin."
                 ),
                 RecipeStep(
@@ -375,24 +426,10 @@ object FoodoscopeSeedCatalog {
                     scientificTip = "Citral and citric acid cut through rich dairy fats to heighten perceived savouriness."
                 )
             ),
-            nutritionPerServing = RecipeNutrition(
-                calories = 420,
-                proteinG = 28.5,
-                carbsG = 14.0,
-                fatG = 27.0,
-                fibreG = 3.8,
-                sugarG = 5.2,
-                saturatedFatG = 14.1,
-                sodiumMg = 410,
-                ironMg = 2.4,
-                calciumMg = 540,
-                vitaminCMg = 68.0,
-                potassiumMg = 420
-            ),
             dominantCompounds = listOf("delta-Decalactone", "ar-Curcumene", "Eugenol", "Capsaicin"),
             flavourPairingNote = "Dairy lactones bridge with phenolic eugenol and sesquiterpenes while capsicum pyrazines add roasted depth."
         ),
-        Recipe(
+        buildRecipeWithCalculatedNutrition(
             id = "rcp_saffron_biryani",
             title = "Saffron Chickpea & Vegetable Dum Biryani",
             subtitle = "Aromatic layered basmati rice & protein-rich chickpeas slow-steamed with whole spices, caramelized onion, and fresh herbs",
@@ -405,17 +442,17 @@ object FoodoscopeSeedCatalog {
             prepMinutes = 15,
             cookMinutes = 25,
             difficulty = "Intermediate",
-            baseServings = 3,
+            baseServings = 2,
             requiredUtensils = listOf("Pot", "Gas stove"),
             tasteTags = listOf("Savoury", "Rich", "Spicy"),
             drawableResName = "img_recipe_saffron_biryani",
             ingredients = listOf(
-                RecipeIngredient("rice", "Basmati Rice", 220.0, "g", isCore = true),
-                RecipeIngredient("chickpeas", "Chickpeas", 200.0, "g", isCore = true),
+                RecipeIngredient("rice", "Basmati Rice", 260.0, "g", isCore = true),
+                RecipeIngredient("chickpeas", "Chickpeas", 240.0, "g", isCore = true),
                 RecipeIngredient("onion", "Onion", 150.0, "g", isCore = true),
                 RecipeIngredient("tomato", "Tomato", 120.0, "g", isCore = false),
-                RecipeIngredient("yogurt", "Greek / Plain Yogurt", 80.0, "g", isCore = false),
-                RecipeIngredient("cumin_seeds", "Cumin Seeds", 6.0, "g", isCore = true),
+                RecipeIngredient("yogurt", "Greek / Plain Yogurt", 100.0, "g", isCore = false),
+                RecipeIngredient("cumin_seeds", "Cumin Seeds", 8.0, "g", isCore = true),
                 RecipeIngredient("cardamom", "Cardamom", 4.0, "g", isCore = false),
                 RecipeIngredient("cloves", "Cloves", 3.0, "g", isCore = false),
                 RecipeIngredient("turmeric_powder", "Turmeric Powder", 5.0, "g", isCore = false),
@@ -444,24 +481,10 @@ object FoodoscopeSeedCatalog {
                     scientificTip = "Closed-vessel Dum steaming traps volatile monoterpenes (linalool, cuminaldehyde) inside the rice canopy."
                 )
             ),
-            nutritionPerServing = RecipeNutrition(
-                calories = 485,
-                proteinG = 17.8,
-                carbsG = 76.0,
-                fatG = 11.5,
-                fibreG = 9.4,
-                sugarG = 6.8,
-                saturatedFatG = 3.4,
-                sodiumMg = 380,
-                ironMg = 4.2,
-                calciumMg = 165,
-                vitaminCMg = 24.0,
-                potassiumMg = 590
-            ),
             dominantCompounds = listOf("1,8-Cineole", "Cuminaldehyde", "Linalool", "Eugenol"),
             flavourPairingNote = "High-note terpene ethers from cardamom and coriander interlock with toasted cuminaldehyde and caramelized onion furanones."
         ),
-        Recipe(
+        buildRecipeWithCalculatedNutrition(
             id = "rcp_moong_palak_dal",
             title = "High-Protein Moong Dal & Spinach Tadka",
             subtitle = "Velvety split yellow lentils simmered with iron-rich spinach and tempered with roasted garlic, cumin, and turmeric",
@@ -479,13 +502,13 @@ object FoodoscopeSeedCatalog {
             tasteTags = listOf("Savoury", "Mild", "Low-oil"),
             drawableResName = "img_hero_gastronomy",
             ingredients = listOf(
-                RecipeIngredient("lentils", "Red & Yellow Lentils", 180.0, "g", isCore = true),
-                RecipeIngredient("spinach", "Spinach", 150.0, "g", isCore = false),
-                RecipeIngredient("tomato", "Tomato", 100.0, "g", isCore = true),
-                RecipeIngredient("onion", "Onion", 80.0, "g", isCore = false),
-                RecipeIngredient("garlic", "Garlic", 12.0, "g", isCore = true),
-                RecipeIngredient("ginger", "Ginger", 10.0, "g", isCore = false),
-                RecipeIngredient("cumin_seeds", "Cumin Seeds", 6.0, "g", isCore = true),
+                RecipeIngredient("lentils", "Red & Yellow Lentils", 360.0, "g", isCore = true),
+                RecipeIngredient("spinach", "Spinach", 200.0, "g", isCore = false),
+                RecipeIngredient("tomato", "Tomato", 120.0, "g", isCore = true),
+                RecipeIngredient("onion", "Onion", 100.0, "g", isCore = false),
+                RecipeIngredient("garlic", "Garlic", 15.0, "g", isCore = true),
+                RecipeIngredient("ginger", "Ginger", 12.0, "g", isCore = false),
+                RecipeIngredient("cumin_seeds", "Cumin Seeds", 8.0, "g", isCore = true),
                 RecipeIngredient("turmeric_powder", "Turmeric Powder", 5.0, "g", isCore = true),
                 RecipeIngredient("lemon", "Lemon", 1.0, "pcs", isCore = false)
             ),
@@ -512,27 +535,13 @@ object FoodoscopeSeedCatalog {
                     scientificTip = "Vitamin C in lemon juice chelates non-heme iron from lentils and spinach, increasing intestinal absorption up to 3x."
                 )
             ),
-            nutritionPerServing = RecipeNutrition(
-                calories = 340,
-                proteinG = 23.4,
-                carbsG = 51.0,
-                fatG = 4.8,
-                fibreG = 12.6,
-                sugarG = 4.1,
-                saturatedFatG = 0.7,
-                sodiumMg = 290,
-                ironMg = 6.1,
-                calciumMg = 140,
-                vitaminCMg = 42.0,
-                potassiumMg = 780
-            ),
             dominantCompounds = listOf("Cuminaldehyde", "Allicin", "ar-Curcumene", "Citral"),
             flavourPairingNote = "Organosulfur allicin derivatives and toasted cuminaldehyde cut grassy spinach notes while citral lifts the finish."
         ),
-        Recipe(
+        buildRecipeWithCalculatedNutrition(
             id = "rcp_jain_jeera_aloo_dal",
-            title = "Jain-Friendly Royal Jeera Aloo & Golden Dal",
-            subtitle = "Zero-allium cumin-crusted baby carrots, capsicum & golden lentils tempered with ginger, green chilli, and fresh coriander",
+            title = "Jain-Friendly Royal Jeera Capsicum & Golden Dal",
+            subtitle = "Zero-allium cumin-tempered capsicum & golden lentils simmered with fresh coriander, turmeric, and lemon",
             cuisine = "Rajasthani",
             mealTypes = listOf("Lunch", "Dinner"),
             dietaryClassification = DietaryLifestyle.VEGAN,
@@ -547,14 +556,14 @@ object FoodoscopeSeedCatalog {
             tasteTags = listOf("Mild", "Savoury", "Tangy"),
             drawableResName = "img_hero_gastronomy",
             ingredients = listOf(
-                RecipeIngredient("lentils", "Red & Yellow Lentils", 160.0, "g", isCore = true),
-                RecipeIngredient("tomato", "Tomato", 120.0, "g", isCore = true),
-                RecipeIngredient("capsicum", "Capsicum", 100.0, "g", isCore = true),
-                RecipeIngredient("cumin_seeds", "Cumin Seeds", 8.0, "g", isCore = true),
-                RecipeIngredient("coriander_powder", "Coriander Powder", 8.0, "g", isCore = true),
+                RecipeIngredient("lentils", "Red & Yellow Lentils", 340.0, "g", isCore = true),
+                RecipeIngredient("tomato", "Tomato", 140.0, "g", isCore = true),
+                RecipeIngredient("capsicum", "Capsicum", 120.0, "g", isCore = true),
+                RecipeIngredient("cumin_seeds", "Cumin Seeds", 10.0, "g", isCore = true),
+                RecipeIngredient("coriander_powder", "Coriander Powder", 10.0, "g", isCore = true),
                 RecipeIngredient("turmeric_powder", "Turmeric Powder", 5.0, "g", isCore = true),
-                RecipeIngredient("green_chilli", "Green Chilli", 6.0, "g", isCore = false),
-                RecipeIngredient("coriander_leaves", "Coriander Leaves", 20.0, "g", isCore = false),
+                RecipeIngredient("green_chilli", "Green Chilli", 8.0, "g", isCore = false),
+                RecipeIngredient("coriander_leaves", "Coriander Leaves", 25.0, "g", isCore = false),
                 RecipeIngredient("lemon", "Lemon", 1.0, "pcs", isCore = false)
             ),
             steps = listOf(
@@ -579,24 +588,10 @@ object FoodoscopeSeedCatalog {
                     highlightedIngredients = listOf("Coriander Leaves", "Lemon")
                 )
             ),
-            nutritionPerServing = RecipeNutrition(
-                calories = 310,
-                proteinG = 20.2,
-                carbsG = 48.0,
-                fatG = 4.2,
-                fibreG = 11.0,
-                sugarG = 4.5,
-                saturatedFatG = 0.6,
-                sodiumMg = 270,
-                ironMg = 4.8,
-                calciumMg = 95,
-                vitaminCMg = 58.0,
-                potassiumMg = 640
-            ),
             dominantCompounds = listOf("Cuminaldehyde", "Linalool", "ar-Curcumene", "Citral"),
             flavourPairingNote = "Pure terpene-aldehyde harmony designed for Jain and allium-free kitchens."
         ),
-        Recipe(
+        buildRecipeWithCalculatedNutrition(
             id = "rcp_masala_egg_bhurji",
             title = "Spiced Masala Egg Bhurji Skillet",
             subtitle = "Quick high-bioavailability scrambled eggs folded with caramelized onion, tomato, green chilli, turmeric, and coriander",
@@ -614,13 +609,13 @@ object FoodoscopeSeedCatalog {
             tasteTags = listOf("Spicy", "Savoury"),
             drawableResName = "img_recipe_paneer_tikka",
             ingredients = listOf(
-                RecipeIngredient("eggs", "Eggs", 4.0, "pcs", isCore = true),
-                RecipeIngredient("onion", "Onion", 100.0, "g", isCore = true),
-                RecipeIngredient("tomato", "Tomato", 100.0, "g", isCore = true),
+                RecipeIngredient("eggs", "Eggs", 6.0, "pcs", isCore = true),
+                RecipeIngredient("onion", "Onion", 110.0, "g", isCore = true),
+                RecipeIngredient("tomato", "Tomato", 110.0, "g", isCore = true),
                 RecipeIngredient("green_chilli", "Green Chilli", 8.0, "g", isCore = false),
                 RecipeIngredient("turmeric_powder", "Turmeric Powder", 4.0, "g", isCore = true),
-                RecipeIngredient("cumin_seeds", "Cumin Seeds", 5.0, "g", isCore = false),
-                RecipeIngredient("coriander_leaves", "Coriander Leaves", 15.0, "g", isCore = false)
+                RecipeIngredient("cumin_seeds", "Cumin Seeds", 6.0, "g", isCore = false),
+                RecipeIngredient("coriander_leaves", "Coriander Leaves", 20.0, "g", isCore = false)
             ),
             steps = listOf(
                 RecipeStep(
@@ -643,24 +638,10 @@ object FoodoscopeSeedCatalog {
                     scientificTip = "Gentle coagulation at ~70°C prevents disulfide cross-linking from squeezing moisture out of egg proteins."
                 )
             ),
-            nutritionPerServing = RecipeNutrition(
-                calories = 295,
-                proteinG = 24.6,
-                carbsG = 9.2,
-                fatG = 18.0,
-                fibreG = 2.4,
-                sugarG = 3.8,
-                saturatedFatG = 4.9,
-                sodiumMg = 340,
-                ironMg = 3.2,
-                calciumMg = 110,
-                vitaminCMg = 28.0,
-                potassiumMg = 390
-            ),
             dominantCompounds = listOf("Allicin", "Furaneol", "ar-Curcumene", "Capsaicin"),
             flavourPairingNote = "Sulfur compounds in eggs and onions harmonize with tomato furanones and warm turmeric sesquiterpenes."
         ),
-        Recipe(
+        buildRecipeWithCalculatedNutrition(
             id = "rcp_rajma_masala_bowl",
             title = "Athletic Recovery Rajma & Basmati Power Bowl",
             subtitle = "Slow-simmered red kidney beans in a ginger-garlic tomato masala paired with steamed basmati for optimal glycogen & protein replenishment",
@@ -678,14 +659,14 @@ object FoodoscopeSeedCatalog {
             tasteTags = listOf("Spicy", "Rich", "Savoury"),
             drawableResName = "img_recipe_saffron_biryani",
             ingredients = listOf(
-                RecipeIngredient("kidney_beans", "Kidney Beans", 200.0, "g", isCore = true),
-                RecipeIngredient("rice", "Basmati Rice", 150.0, "g", isCore = true),
+                RecipeIngredient("kidney_beans", "Kidney Beans", 320.0, "g", isCore = true),
+                RecipeIngredient("rice", "Basmati Rice", 240.0, "g", isCore = true),
                 RecipeIngredient("onion", "Onion", 120.0, "g", isCore = true),
                 RecipeIngredient("tomato", "Tomato", 150.0, "g", isCore = true),
                 RecipeIngredient("ginger", "Ginger", 15.0, "g", isCore = true),
                 RecipeIngredient("garlic", "Garlic", 15.0, "g", isCore = true),
-                RecipeIngredient("cumin_seeds", "Cumin Seeds", 6.0, "g", isCore = true),
-                RecipeIngredient("coriander_powder", "Coriander Powder", 8.0, "g", isCore = false),
+                RecipeIngredient("cumin_seeds", "Cumin Seeds", 8.0, "g", isCore = true),
+                RecipeIngredient("coriander_powder", "Coriander Powder", 10.0, "g", isCore = false),
                 RecipeIngredient("garam_masala", "Garam Masala", 6.0, "g", isCore = false)
             ),
             steps = listOf(
@@ -703,24 +684,10 @@ object FoodoscopeSeedCatalog {
                     scientificTip = "Combining legume lysine with rice methionine yields a complete essential amino acid profile."
                 )
             ),
-            nutritionPerServing = RecipeNutrition(
-                calories = 520,
-                proteinG = 22.8,
-                carbsG = 86.0,
-                fatG = 7.4,
-                fibreG = 14.8,
-                sugarG = 5.6,
-                saturatedFatG = 1.1,
-                sodiumMg = 390,
-                ironMg = 5.4,
-                calciumMg = 135,
-                vitaminCMg = 31.0,
-                potassiumMg = 890
-            ),
             dominantCompounds = listOf("alpha-Zingiberene", "Cuminaldehyde", "Eugenol", "Allicin"),
             flavourPairingNote = "Ginger sesquiterpenes and clove eugenol cut the earthy starchiness of red kidney beans."
         ),
-        Recipe(
+        buildRecipeWithCalculatedNutrition(
             id = "rcp_lemon_pepper_chicken",
             title = "Herb-Crusted Lemon Pepper Chicken Tikka",
             subtitle = "Lean high-protein chicken breast marinated in yogurt, crushed black peppercorns, lemon zest, garlic, and coriander",
@@ -738,8 +705,8 @@ object FoodoscopeSeedCatalog {
             tasteTags = listOf("Savoury", "Tangy", "Low-oil"),
             drawableResName = "img_recipe_paneer_tikka",
             ingredients = listOf(
-                RecipeIngredient("chicken_breast", "Chicken Breast", 300.0, "g", isCore = true),
-                RecipeIngredient("yogurt", "Greek / Plain Yogurt", 80.0, "g", isCore = true),
+                RecipeIngredient("chicken_breast", "Chicken Breast", 320.0, "g", isCore = true),
+                RecipeIngredient("yogurt", "Greek / Plain Yogurt", 100.0, "g", isCore = true),
                 RecipeIngredient("lemon", "Lemon", 1.0, "pcs", isCore = true),
                 RecipeIngredient("garlic", "Garlic", 15.0, "g", isCore = true),
                 RecipeIngredient("black_pepper_powder", "Black Pepper Powder", 8.0, "g", isCore = true),
@@ -750,7 +717,7 @@ object FoodoscopeSeedCatalog {
                     1,
                     "Coat cubed chicken breast in yogurt, lemon juice, minced garlic, and freshly cracked black pepper for 10 minutes.",
                     durationSeconds = 600,
-                    highlightedIngredients = listOf("Chicken Breast", "Yogurt", "Lemon", "Black Pepper Powder")
+                    highlightedIngredients = listOf("Chicken Breast", "Greek / Plain Yogurt", "Lemon", "Black Pepper Powder")
                 ),
                 RecipeStep(
                     2,
@@ -758,20 +725,6 @@ object FoodoscopeSeedCatalog {
                     durationSeconds = 420,
                     highlightedIngredients = listOf("Chicken Breast")
                 )
-            ),
-            nutritionPerServing = RecipeNutrition(
-                calories = 365,
-                proteinG = 46.0,
-                carbsG = 7.5,
-                fatG = 14.2,
-                fibreG = 1.4,
-                sugarG = 3.2,
-                saturatedFatG = 4.1,
-                sodiumMg = 360,
-                ironMg = 1.9,
-                calciumMg = 120,
-                vitaminCMg = 34.0,
-                potassiumMg = 610
             ),
             dominantCompounds = listOf("Piperine", "Citral", "Allicin", "delta-Decalactone"),
             flavourPairingNote = "Piperine pungency pairs with bright lemon citral and creamy yogurt lactones."
@@ -902,7 +855,7 @@ object FoodoscopeSeedCatalog {
             displayName = "Red Chilli Powder",
             aliases = listOf("lal mirch"),
             category = IngredientCategory.SPICES,
-            quantity = 18.0, // Low stock example!
+            quantity = 18.0,
             unit = "g",
             source = "web_sync",
             confidence = 1.0f,

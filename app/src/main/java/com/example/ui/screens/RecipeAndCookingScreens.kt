@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -21,17 +22,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.example.R
-import com.example.data.FoodoscopeSeedCatalog
 import com.example.domain.model.*
+import com.example.domain.usecase.IngredientAliasNormalizer
 import com.example.ui.DrishyamUiState
-import com.example.ui.SubScreen
 import com.example.ui.theme.DrishyamColors
 import kotlin.math.roundToInt
 
@@ -40,16 +39,21 @@ fun DiscoverRecipesScreen(
     state: DrishyamUiState,
     onSearchChange: (String) -> Unit,
     onCuisineSelect: (String) -> Unit,
+    onToggleShowSavedOnly: () -> Unit = {},
+    onCreateCustomRecipe: (String, String, String, Int, Int, Int, List<RecipeIngredient>, List<String>, List<String>) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     onOpenRecipe: (String) -> Unit,
     onOpenFlavourScience: () -> Unit
 ) {
+    var showCreateRecipeDialog by remember { mutableStateOf(false) }
+
     val cuisines = listOf("All", "North Indian", "Punjabi", "Rajasthani", "Maharashtrian", "Mediterranean")
     val filtered = state.scoredRecipes.filter { scored ->
+        val matchesSaved = !state.showSavedOnly || scored.recipe.id in state.savedRecipeIds
         val matchesCuisine = state.selectedCuisineFilter == "All" || scored.recipe.cuisine == state.selectedCuisineFilter
         val matchesSearch = state.recipeSearchQuery.isBlank() ||
             scored.recipe.title.contains(state.recipeSearchQuery, ignoreCase = true) ||
             scored.recipe.ingredients.any { it.displayName.contains(state.recipeSearchQuery, ignoreCase = true) }
-        matchesCuisine && matchesSearch
+        matchesSaved && matchesCuisine && matchesSearch
     }
 
     Column(
@@ -75,13 +79,27 @@ fun DiscoverRecipesScreen(
                     style = MaterialTheme.typography.headlineLarge
                 )
             }
-            OutlinedButton(
-                onClick = onOpenFlavourScience,
-                border = BorderStroke(1.dp, DrishyamColors.SecondaryGold)
-            ) {
-                Icon(Icons.Default.Science, contentDescription = null, tint = DrishyamColors.SecondaryGold, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("FlavorDB", color = DrishyamColors.SecondaryGold)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = onOpenFlavourScience,
+                    border = BorderStroke(1.dp, DrishyamColors.SecondaryGold)
+                ) {
+                    Icon(Icons.Default.Science, contentDescription = null, tint = DrishyamColors.SecondaryGold, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("FlavorDB", color = DrishyamColors.SecondaryGold)
+                }
+                Button(
+                    onClick = { showCreateRecipeDialog = true },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = DrishyamColors.PrimaryOrange,
+                        contentColor = DrishyamColors.Background
+                    ),
+                    modifier = Modifier.testTag("create_custom_recipe_button")
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Create")
+                }
             }
         }
 
@@ -104,6 +122,19 @@ fun DiscoverRecipesScreen(
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            FilterChip(
+                selected = state.showSavedOnly,
+                onClick = onToggleShowSavedOnly,
+                leadingIcon = {
+                    Icon(
+                        imageVector = if (state.showSavedOnly) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                },
+                label = { Text("Saved (${state.savedRecipeIds.size})") },
+                modifier = Modifier.testTag("saved_recipes_filter_chip")
+            )
             cuisines.forEach { cuisine ->
                 FilterChip(
                     selected = state.selectedCuisineFilter == cuisine,
@@ -144,6 +175,190 @@ fun DiscoverRecipesScreen(
                 )
             }
         }
+    }
+
+    if (showCreateRecipeDialog) {
+        var titleInput by remember { mutableStateOf("") }
+        var subtitleInput by remember { mutableStateOf("Custom Culinary Formulation") }
+        var cuisineInput by remember { mutableStateOf("North Indian") }
+        var servingsInput by remember { mutableStateOf("2") }
+        var ingNameInput by remember { mutableStateOf("paneer") }
+        var ingQtyInput by remember { mutableStateOf("200") }
+        var ingUnitInput by remember { mutableStateOf("g") }
+        var addedIngredients by remember {
+            mutableStateOf(
+                listOf(
+                    RecipeIngredient("paneer", "Paneer", 200.0, "g", isCore = true),
+                    RecipeIngredient("spinach", "Spinach", 150.0, "g", isCore = true),
+                    RecipeIngredient("ghee", "Ghee", 10.0, "g", isCore = false)
+                )
+            )
+        }
+        var instructionsInput by remember {
+            mutableStateOf("1. Sear cubed paneer in warm ghee until golden.\n2. Fold in blanched spinach and simmer with spices.")
+        }
+
+        val servingsInt = (servingsInput.toIntOrNull() ?: 2).coerceAtLeast(1)
+        val liveNutrition = remember(addedIngredients, servingsInt) {
+            IngredientAliasNormalizer.calculateRecipeNutritionFromIngredients(addedIngredients, servingsInt)
+        }
+
+        AlertDialog(
+            onDismissRequest = { showCreateRecipeDialog = false },
+            containerColor = DrishyamColors.ElevatedSurface,
+            title = { Text("Author Custom Recipe (Dynamic IFCT/USDA)") },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = titleInput,
+                        onValueChange = { titleInput = it },
+                        label = { Text("Recipe Title") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = cuisineInput,
+                            onValueChange = { cuisineInput = it },
+                            label = { Text("Cuisine") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = servingsInput,
+                            onValueChange = { servingsInput = it },
+                            label = { Text("Servings") },
+                            singleLine = true,
+                            modifier = Modifier.width(90.dp)
+                        )
+                    }
+
+                    // Live IFCT/USDA Nutrition Preview Banner
+                    Surface(
+                        color = DrishyamColors.Surface,
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, DrishyamColors.PrimaryOrange.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                "LIVE CALCULATED NUTRITION / SERVING:",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = DrishyamColors.PrimaryOrange
+                            )
+                            Text(
+                                "${liveNutrition.calories} kcal • ${liveNutrition.proteinG}g P • ${liveNutrition.carbsG}g C • ${liveNutrition.fatG}g F • ${liveNutrition.fibreG}g Fibre",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = DrishyamColors.SecondaryGold
+                            )
+                        }
+                    }
+
+                    Text("Add Ingredient to Formulation:", style = MaterialTheme.typography.labelMedium)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = ingNameInput,
+                            onValueChange = { ingNameInput = it },
+                            label = { Text("Ingredient") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1.2f)
+                        )
+                        OutlinedTextField(
+                            value = ingQtyInput,
+                            onValueChange = { ingQtyInput = it },
+                            label = { Text("Qty") },
+                            singleLine = true,
+                            modifier = Modifier.weight(0.7f)
+                        )
+                        OutlinedTextField(
+                            value = ingUnitInput,
+                            onValueChange = { ingUnitInput = it },
+                            label = { Text("Unit") },
+                            singleLine = true,
+                            modifier = Modifier.weight(0.6f)
+                        )
+                        IconButton(
+                            onClick = {
+                                if (ingNameInput.isNotBlank()) {
+                                    val meta = IngredientAliasNormalizer.resolve(ingNameInput)
+                                    val defQty = if (meta.defaultUnit == "pcs") 4.0 else 100.0
+                                    val qty = ingQtyInput.toDoubleOrNull() ?: defQty
+                                    addedIngredients = addedIngredients + RecipeIngredient(
+                                        canonicalName = meta.canonicalName,
+                                        displayName = meta.displayName,
+                                        quantity = qty,
+                                        unit = ingUnitInput.ifBlank { meta.defaultUnit },
+                                        isCore = true
+                                    )
+                                    ingNameInput = ""
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.AddCircle, contentDescription = "Add Ingredient", tint = DrishyamColors.Success)
+                        }
+                    }
+
+                    addedIngredients.forEachIndexed { idx, ing ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("• ${ing.displayName} (${ing.quantity.roundToInt()} ${ing.unit})", style = MaterialTheme.typography.bodySmall)
+                            IconButton(
+                                onClick = { addedIngredients = addedIngredients.filterIndexed { i, _ -> i != idx } },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Remove", tint = DrishyamColors.Danger, modifier = Modifier.size(14.dp))
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = instructionsInput,
+                        onValueChange = { instructionsInput = it },
+                        label = { Text("Step-by-Step Instructions (one per line)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val steps = instructionsInput.lines().map { it.trim() }.filter { it.isNotBlank() }
+                        onCreateCustomRecipe(
+                            titleInput.ifBlank { "Chef Custom Formulation" },
+                            subtitleInput,
+                            cuisineInput,
+                            10,
+                            18,
+                            servingsInt,
+                            addedIngredients,
+                            steps,
+                            listOf("Kadhai", "Skillet")
+                        )
+                        showCreateRecipeDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = DrishyamColors.PrimaryOrange,
+                        contentColor = DrishyamColors.Background
+                    )
+                ) {
+                    Text("Save & Rank Recipe")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateRecipeDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
@@ -315,7 +530,10 @@ fun RecipeDetailScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Portion & Nutritional Impact", style = MaterialTheme.typography.titleMedium)
+                            Column {
+                                Text("Portion & Nutritional Impact", style = MaterialTheme.typography.titleMedium)
+                                Text(recipe.nutritionPerServing.dataSourceType, style = MaterialTheme.typography.labelSmall, color = DrishyamColors.SecondaryText)
+                            }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 IconButton(onClick = { onAdjustServings(state.selectedServings - 1) }) {
                                     Icon(Icons.Default.RemoveCircleOutline, contentDescription = "Decrease Servings", tint = DrishyamColors.PrimaryOrange)
@@ -341,6 +559,12 @@ fun RecipeDetailScreen(
                             Text("Fat: ${(n.fatG * servingRatio).roundToInt()}g", style = MaterialTheme.typography.labelMedium)
                             Text("Fibre: ${(n.fibreG * servingRatio).roundToInt()}g", style = MaterialTheme.typography.labelMedium, color = DrishyamColors.Success)
                         }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = "Micronutrients: Iron ${((n.ironMg * servingRatio) * 10).roundToInt() / 10.0}mg • Calcium ${(n.calciumMg * servingRatio).roundToInt()}mg • Vit C ${((n.vitaminCMg * servingRatio) * 10).roundToInt() / 10.0}mg • Potassium ${(n.potassiumMg * servingRatio).roundToInt()}mg",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = DrishyamColors.SecondaryText
+                        )
                     }
                 }
 
@@ -405,8 +629,9 @@ fun CookingModeScreen(
         onDispose { view.keepScreenOn = false }
     }
 
-    val recipe = FoodoscopeSeedCatalog.recipes.find { it.id == state.selectedRecipeId }
-        ?: FoodoscopeSeedCatalog.recipes.first()
+    val recipe = state.allRecipes.find { it.id == state.selectedRecipeId }
+        ?: state.allRecipes.firstOrNull()
+        ?: return
     val currentStep = recipe.steps.getOrElse(state.cookingStepIndex) { recipe.steps.first() }
     val servingRatio = state.selectedServings.toDouble() / recipe.baseServings.coerceAtLeast(1)
 

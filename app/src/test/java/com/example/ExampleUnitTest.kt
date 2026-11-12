@@ -1,6 +1,7 @@
 package com.example
 
 import com.example.data.FoodoscopeSeedCatalog
+import com.example.data.local.KeystoreTokenVault
 import com.example.domain.model.*
 import com.example.domain.usecase.ComputationalGastronomyEngine
 import com.example.domain.usecase.IngredientAliasNormalizer
@@ -18,6 +19,25 @@ class ExampleUnitTest {
         assertEquals("cumin_seeds", IngredientAliasNormalizer.resolve("jeera").canonicalName)
         assertEquals("chickpeas", IngredientAliasNormalizer.resolve("Kabuli Chana").canonicalName)
         assertEquals("paneer", IngredientAliasNormalizer.resolve("Indian Cottage Cheese").canonicalName)
+    }
+
+    @Test
+    fun `test dynamic IFCT USDA ingredient nutrition calculation and unit normalization`() {
+        // 150g tomato (1.5 * 18 = 27 kcal) + 200g paneer (2.0 * 296 = 592 kcal) across 2 servings
+        val ingredients = listOf(
+            RecipeIngredient("paneer", "Paneer", 200.0, "g", isCore = true),
+            RecipeIngredient("tomato", "Tomato", 150.0, "g", isCore = true)
+        )
+        val perServing = IngredientAliasNormalizer.calculateRecipeNutritionFromIngredients(ingredients, baseServings = 2)
+        // Paneer (200g * 2.65 = 530 kcal) + Tomato (150g * 0.18 = 27 kcal) = 557 / 2 = 279 kcal
+        assertEquals(279, perServing.calories)
+        // Paneer protein: 200g -> 36.6g + Tomato 150g -> 1.35g = 37.95g / 2 = 19.0g
+        assertEquals(19.0, perServing.proteinG, 0.2)
+
+        // Unit conversion: 2 pcs onion (110g/piece) -> 2 * 110g = 220g
+        val onionMeta = IngredientAliasNormalizer.resolve("onion")
+        val onionGrams = IngredientAliasNormalizer.normalizeQuantityToGrams(2.0, "pcs", onionMeta.nutrientPer100g.gramsPerPiece)
+        assertEquals(220.0, onionGrams, 0.01)
     }
 
     @Test
@@ -77,7 +97,7 @@ class ExampleUnitTest {
     }
 
     @Test
-    fun `test computational gastronomy equation and single ingredient unlock engine`() {
+    fun `test computational gastronomy equation, unlock engine, and auto 7-day meal plan generator`() {
         val profile = UserProfile(
             dietaryLifestyle = DietaryLifestyle.VEGETARIAN,
             primaryGoal = FitnessGoalType.LEAN_BULK
@@ -106,6 +126,11 @@ class ExampleUnitTest {
         )
         assertNotNull(unlock)
         assertTrue(unlock!!.unlockedRecipes.isNotEmpty())
+
+        // Verify 7-day auto meal plan generator creates 21 meals (3 slots x 7 days)
+        val weeklyPlan = ComputationalGastronomyEngine.generateAutoWeeklyPlan(ranked, targets)
+        assertEquals(21, weeklyPlan.size)
+        assertEquals(3, weeklyPlan.count { it.dayIndex == 0 })
     }
 
     @Test
@@ -140,10 +165,16 @@ class ExampleUnitTest {
     }
 
     @Test
-    fun `test FlavorDB molecular substitution engine ranks shared aroma compounds`() {
+    fun `test FlavorDB molecular substitution engine and SHA256 credential hashing`() {
         val subs = FoodoscopeSeedCatalog.computeSubstitutions("cumin_seeds", setOf("coriander_powder"))
         assertTrue(subs.isNotEmpty())
         assertTrue(subs.first().inPantry)
         assertTrue(subs.first().sharedCompounds.isNotEmpty())
+
+        val h1 = KeystoreTokenVault.sha256Hash("pass123", "chef@drishyam.ai")
+        val h2 = KeystoreTokenVault.sha256Hash("pass123", "chef@drishyam.ai")
+        val h3 = KeystoreTokenVault.sha256Hash("other", "chef@drishyam.ai")
+        assertEquals(h1, h2)
+        assertNotEquals(h1, h3)
     }
 }

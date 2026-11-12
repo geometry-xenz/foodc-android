@@ -1,14 +1,14 @@
 package com.example.domain.model
 
 enum class UnitSystem(val label: String) {
-    METRIC("Metric (kg, cm, g)"),
+    METRIC("Metric (kg, cm, g, ml)"),
     IMPERIAL("Imperial (lb, ft/in, oz)")
 }
 
 enum class BiologicalSex(val label: String, val mifflinOffset: Int) {
     MALE("Male", 5),
     FEMALE("Female", -161),
-    UNSPECIFIED("Prefer not to say / Average", -78)
+    UNSPECIFIED("Prefer not to say", -78)
 }
 
 enum class ActivityLevel(
@@ -18,17 +18,17 @@ enum class ActivityLevel(
 ) {
     SEDENTARY(
         "Sedentary",
-        "Desk job, minimal planned exercise or walking",
+        "Desk job or minimal planned physical activity",
         1.20
     ),
     LIGHTLY_ACTIVE(
         "Lightly Active",
-        "Light training or brisk walking 1–3 days per week",
+        "Light exercise or brisk walking 1–3 days per week",
         1.375
     ),
     MODERATELY_ACTIVE(
         "Moderately Active",
-        "Consistent training or active lifestyle 3–5 days per week",
+        "Moderate training or active lifestyle 3–5 days per week",
         1.55
     ),
     VERY_ACTIVE(
@@ -38,7 +38,7 @@ enum class ActivityLevel(
     ),
     EXTREMELY_ACTIVE(
         "Extremely Active",
-        "Intense daily training or twice-a-day endurance/strength sessions",
+        "Intense daily training or twice-a-day athletic sessions",
         1.90
     )
 }
@@ -58,35 +58,35 @@ enum class FitnessGoalType(
     FAT_LOSS(
         id = "fat_loss",
         title = "Fat Loss / Cutting",
-        subtitle = "Reduce body fat while preserving lean muscle mass with high satiety",
-        calorieDeltaFactor = 0.80, // 20% sustainable deficit
+        subtitle = "Reduce body fat while maintaining lean mass with high-satiety, fibre-rich meals",
+        calorieDeltaFactor = 0.80,
         proteinGramsPerKg = 2.1,
         carbShare = 0.35,
         fatShare = 0.28,
         fibreTargetG = 34,
-        priorityNote = "Prioritizes high-protein, fibre-rich, lower energy-density meals for sustainable satiety."
+        priorityNote = "Prioritizes calorie deficit (-20%), high protein (2.1g/kg), high fibre, and lower energy density."
     ),
     LEAN_BULK(
         id = "lean_bulk",
         title = "Lean Bulk",
-        subtitle = "Support hypertrophy with a controlled 10% surplus to minimize fat gain",
+        subtitle = "Support muscle hypertrophy while managing excess fat gain (+10% controlled surplus)",
         calorieDeltaFactor = 1.10,
         proteinGramsPerKg = 2.0,
         carbShare = 0.48,
         fatShare = 0.25,
         fibreTargetG = 32,
-        priorityNote = "Prioritizes nutrient-dense, high-protein meals and recovery carbohydrates."
+        priorityNote = "Prioritizes modest surplus (+10%), high protein, recovery carbohydrates, and nutrient density."
     ),
     TRADITIONAL_BULK(
         id = "traditional_bulk",
         title = "Traditional Bulk",
-        subtitle = "Steady weight and strength gain with a 18% energy surplus",
+        subtitle = "Support steady weight and strength gain with adequate energy and protein (+18% surplus)",
         calorieDeltaFactor = 1.18,
         proteinGramsPerKg = 1.8,
         carbShare = 0.50,
         fatShare = 0.28,
         fibreTargetG = 30,
-        priorityNote = "Focuses on energy-dense, balanced whole-food recipes that fit higher calorie schedules."
+        priorityNote = "Prioritizes energy-dense whole-food recipes and practical meal frequency."
     ),
     DIRTY_BULK(
         id = "dirty_bulk",
@@ -97,8 +97,8 @@ enum class FitnessGoalType(
         carbShare = 0.48,
         fatShare = 0.32,
         fibreTargetG = 26,
-        priorityNote = "High energy density while still enforcing all allergen and mandatory dietary safety rules.",
-        cautionNote = "Higher energy surplus can accelerate weight gain but carries greater risk of unwanted fat gain and reduced micronutrient density."
+        priorityNote = "Supports high calorie intake while still enforcing all allergen and mandatory dietary restrictions.",
+        cautionNote = "Higher energy intake can accelerate weight gain but carries greater risk of unwanted fat gain and potential reduction in overall dietary quality."
     ),
     MAINTENANCE(
         id = "maintenance",
@@ -109,63 +109,63 @@ enum class FitnessGoalType(
         carbShare = 0.45,
         fatShare = 0.30,
         fibreTargetG = 30,
-        priorityNote = "Balances energy equilibrium, adequate protein, and broad phytochemical diversity."
+        priorityNote = "Prioritizes energy equilibrium, adequate protein, fibre, and nutrient diversity."
     ),
     BODY_RECOMPOSITION(
         id = "body_recomposition",
         title = "Body Recomposition",
-        subtitle = "Simultaneously improve lean mass ratio near maintenance (-5% energy, high protein)",
+        subtitle = "Improve the balance of lean mass and body fat (-5% energy, elevated protein)",
         calorieDeltaFactor = 0.95,
         proteinGramsPerKg = 2.2,
         carbShare = 0.40,
         fatShare = 0.26,
         fibreTargetG = 32,
-        priorityNote = "Emphasizes elevated protein density and precision macro partitioning."
+        priorityNote = "Prioritizes elevated protein (2.2g/kg), nutrient density, and consistent macro partitioning."
     ),
     ATHLETIC_PERFORMANCE(
         id = "athletic_performance",
         title = "Athletic Performance",
-        subtitle = "Fuel training output, glycogen replenishment, and structured recovery (+8% energy)",
+        subtitle = "Fuel training output, carbohydrate availability, and recovery (+8% energy)",
         calorieDeltaFactor = 1.08,
         proteinGramsPerKg = 1.9,
         carbShare = 0.54,
         fatShare = 0.24,
         fibreTargetG = 30,
-        priorityNote = "Prioritizes carbohydrate availability, pre/post-workout timing, and recovery micronutrients. Not a medical or performance guarantee."
+        priorityNote = "Prioritizes energy availability, carbohydrate requirements, and recovery choices. Does not make medical or performance guarantees."
     ),
     GENERAL_HEALTH(
         id = "general_health",
         title = "General Health",
-        subtitle = "Long-term metabolic wellness, gut fibre diversity, and whole-food culinary balance",
+        subtitle = "Balanced meals, fibre, micronutrient diversity, and sustainable food choices",
         calorieDeltaFactor = 1.00,
         proteinGramsPerKg = 1.4,
         carbShare = 0.46,
         fatShare = 0.30,
         fibreTargetG = 35,
-        priorityNote = "Maximizes fibre, spice antioxidants, and balanced culinary variety."
+        priorityNote = "Prioritizes balanced whole foods, gut fibre diversity, and phytochemical richness."
     )
 }
 
 enum class DietaryLifestyle(val label: String, val description: String) {
-    VEGETARIAN("Vegetarian", "Plant-based + dairy; excludes meat, poultry, fish, and eggs"),
-    VEGAN("Vegan", "100% plant-based; excludes all animal and dairy products"),
-    EGGETARIAN("Eggetarian", "Vegetarian diet including eggs"),
-    PESCATARIAN("Pescatarian", "Plant-based, dairy, eggs, and fish/seafood; no land meat"),
-    NON_VEGETARIAN("Non-Vegetarian", "Omnivorous; includes poultry, meat, seafood, dairy, and plants"),
-    NONE("No Dietary Restrictions", "All culinary categories permitted")
+    VEGETARIAN("Vegetarian", "Plant-based and dairy; excludes meat, poultry, fish, and eggs"),
+    VEGAN("Vegan", "100% plant-based; excludes all dairy, eggs, and animal products"),
+    EGGETARIAN("Eggetarian", "Vegetarian diet plus eggs"),
+    PESCATARIAN("Pescatarian", "Plant-based, dairy, eggs, and fish/seafood"),
+    NON_VEGETARIAN("Non-Vegetarian", "Includes poultry, meat, seafood, eggs, dairy, and plant foods"),
+    NONE("No Dietary Restrictions", "All food categories permitted")
 }
 
 enum class DietaryRestriction(val label: String) {
     DAIRY_FREE("Dairy-Free"),
     LACTOSE_FREE("Lactose-Free"),
     GLUTEN_FREE("Gluten-Free"),
-    JAIN_FRIENDLY("Jain-Friendly (No Onion/Garlic/Root Vegetables)")
+    JAIN_FRIENDLY("Jain-Friendly (No Onion, Garlic, Potato, or Root Vegetables)")
 }
 
 enum class AllergenType(val label: String, val triggerKeywords: List<String>) {
     PEANUTS("Peanuts", listOf("peanut", "groundnut", "arachis")),
     TREE_NUTS("Tree Nuts", listOf("cashew", "almond", "walnut", "pistachio", "hazelnut", "pecan")),
-    MILK("Milk & Dairy", listOf("milk", "paneer", "ghee", "butter", "cream", "yogurt", "curd", "cheese", "whey")),
+    MILK("Milk", listOf("milk", "paneer", "ghee", "butter", "cream", "yogurt", "curd", "cheese", "whey")),
     EGGS("Eggs", listOf("egg", "albumen", "mayonnaise")),
     SOY("Soy", listOf("soy", "tofu", "edamame", "tempeh", "soya")),
     WHEAT_GLUTEN("Wheat & Gluten", listOf("wheat", "atta", "maida", "semolina", "suji", "bread", "roti", "naan", "barley", "rye")),
@@ -190,11 +190,11 @@ enum class IngredientCategory(val label: String) {
 enum class DetectionState(val label: String) {
     SEARCHING("Searching"),
     CANDIDATE("Candidate Detected"),
-    STABILIZING("Stabilizing (1.0s lock)"),
-    STABLE("Stable >= 75%"),
+    STABILIZING("Stabilizing"),
+    STABLE("Stable"),
     AWAITING_CONFIRMATION("Awaiting Confirmation"),
-    CONFIRMED("Confirmed in Pantry"),
-    UNCERTAIN("Uncertain (< 75%)")
+    CONFIRMED("Confirmed"),
+    UNCERTAIN("Uncertain")
 }
 
 data class NormalizedRect(
@@ -220,6 +220,28 @@ data class ScannedCandidate(
     val source: String = "android_scanner"
 )
 
+/**
+ * Per-100g authoritative nutrient profile (USDA / IFCT / Foodoscope)
+ * used for dynamic ingredient-level nutrient mapping & recipe aggregation (Part 10.4).
+ */
+data class IngredientNutrientProfile(
+    val canonicalName: String,
+    val caloriesPer100g: Double,
+    val proteinPer100g: Double,
+    val carbsPer100g: Double,
+    val fatPer100g: Double,
+    val fibrePer100g: Double,
+    val sugarPer100g: Double,
+    val saturatedFatPer100g: Double,
+    val sodiumMgPer100g: Double,
+    val ironMgPer100g: Double,
+    val calciumMgPer100g: Double,
+    val vitaminCMgPer100g: Double,
+    val potassiumMgPer100g: Double,
+    val gramsPerPiece: Double = 50.0,
+    val dataSource: String = "IFCT / USDA Database"
+)
+
 data class PantryItem(
     val id: String,
     val canonicalName: String,
@@ -228,7 +250,7 @@ data class PantryItem(
     val category: IngredientCategory,
     val quantity: Double,
     val unit: String,
-    val source: String, // "android_scanner", "deep_inspect", "manual", "web_sync"
+    val source: String,
     val confidence: Float,
     val confirmed: Boolean,
     val isAvailable: Boolean = true,
@@ -242,18 +264,18 @@ data class PantryItem(
 }
 
 data class UserProfile(
-    val userId: String = "usr_drishyam_01",
-    val email: String = "chef@drishyam.ai",
+    val userId: String = "usr_local_explorer",
+    val email: String = "aarav.sharma@drishyam.ai",
     val displayName: String = "Aarav Sharma",
     val age: Int = 28,
     val heightCm: Double = 176.0,
     val weightKg: Double = 74.0,
-    val targetWeightKg: Double? = 72.0,
+    val targetWeightKg: Double? = 76.0,
     val biologicalSex: BiologicalSex = BiologicalSex.MALE,
     val activityLevel: ActivityLevel = ActivityLevel.MODERATELY_ACTIVE,
     val unitSystem: UnitSystem = UnitSystem.METRIC,
-    val primaryGoal: FitnessGoalType = FitnessGoalType.LEAN_BULK,
-    val secondaryGoals: Set<FitnessGoalType> = setOf(FitnessGoalType.ATHLETIC_PERFORMANCE),
+    val primaryGoal: FitnessGoalType = FitnessGoalType.MAINTENANCE,
+    val secondaryGoals: Set<FitnessGoalType> = emptySet(),
     val isGoalPaused: Boolean = false,
     val dietaryLifestyle: DietaryLifestyle = DietaryLifestyle.VEGETARIAN,
     val dietaryRestrictions: Set<DietaryRestriction> = emptySet(),
@@ -261,16 +283,17 @@ data class UserProfile(
     val customAllergens: List<String> = emptyList(),
     val excludedIngredients: List<String> = emptyList(),
     val preferredCuisines: Set<String> = setOf("North Indian", "South Indian", "Mediterranean"),
-    val preferredTastes: Set<String> = setOf("Spicy", "Savoury", "Smoky"),
-    val spiceTolerance: String = "Medium-High",
+    val preferredTastes: Set<String> = setOf("Spicy", "Savoury"),
+    val spiceTolerance: String = "Medium",
     val maxCookingMinutes: Int = 40,
     val skillLevel: String = "Intermediate",
-    val availableUtensils: Set<String> = setOf("Gas stove", "Pan", "Pot", "Pressure cooker", "Blender"),
+    val preferredMealTypes: Set<String> = setOf("Breakfast", "Lunch", "Dinner"),
+    val availableUtensils: Set<String> = setOf("Gas stove", "Pan", "Pot", "Pressure cooker"),
     val customCalorieOverride: Int? = null,
     val customProteinOverrideG: Int? = null,
     val customCarbsOverrideG: Int? = null,
     val customFatOverrideG: Int? = null,
-    val onboardingCompleted: Boolean = true
+    val onboardingCompleted: Boolean = false
 )
 
 data class NutritionTargets(
@@ -318,7 +341,7 @@ data class RecipeNutrition(
     val calciumMg: Int,
     val vitaminCMg: Double,
     val potassiumMg: Int,
-    val dataSourceType: String = "Foodoscope RecipeDB + USDA/IFCT Calculated"
+    val dataSourceType: String = "Calculated from IFCT/USDA Ingredient Quantities"
 )
 
 data class Recipe(
@@ -349,7 +372,7 @@ data class Recipe(
 
 data class ScoredRecipe(
     val recipe: Recipe,
-    val gastronomyScore: Double, // 0.0..1.0 exact equation
+    val gastronomyScore: Double,
     val coreCoverage: Double,
     val counterUtilisation: Double,
     val flavourCoherence: Double,
@@ -419,7 +442,7 @@ enum class MealSlot(val label: String) {
 
 data class MealLogEntry(
     val id: String,
-    val dateIso: String, // YYYY-MM-DD
+    val dateIso: String,
     val mealSlot: MealSlot,
     val recipeId: String?,
     val title: String,
@@ -432,14 +455,18 @@ data class MealLogEntry(
     val sugarG: Double,
     val saturatedFatG: Double,
     val sodiumMg: Int,
+    val ironMg: Double = 0.0,
+    val calciumMg: Int = 0,
+    val vitaminCMg: Double = 0.0,
+    val potassiumMg: Int = 0,
     val notes: String = "",
-    val sourceLabel: String = "RecipeDB Calculated",
+    val sourceLabel: String = "Calculated from Ingredient Quantities",
     val timestampMs: Long = System.currentTimeMillis()
 )
 
 data class PlannedMealEntry(
     val id: String,
-    val dayIndex: Int, // 0 = Mon .. 6 = Sun
+    val dayIndex: Int,
     val dayName: String,
     val mealSlot: MealSlot,
     val recipeId: String?,
@@ -458,7 +485,7 @@ data class ShoppingListItem(
     val category: IngredientCategory,
     val quantity: Double,
     val unit: String,
-    val reason: String, // "Missing for Paneer Tikka", "Low Stock in Pantry", "Weekly Meal Plan"
+    val reason: String,
     val isPurchased: Boolean = false,
     val alternativeSuggestion: String? = null
 )
@@ -471,3 +498,20 @@ data class SyncOperation(
     val timestampMs: Long,
     val synced: Boolean
 )
+
+data class AppNotificationItem(
+    val id: String,
+    val title: String,
+    val body: String,
+    val category: String, // "ALLERGY_ALERT", "LOW_STOCK", "SYNC", "GOAL", "TIMER"
+    val timestampMs: Long = System.currentTimeMillis(),
+    val isRead: Boolean = false
+)
+
+enum class AuthFlowStep {
+    WELCOME,
+    LOGIN,
+    REGISTER,
+    FORGOT_PASSWORD,
+    PASSWORD_RESET
+}

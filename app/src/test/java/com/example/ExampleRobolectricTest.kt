@@ -31,6 +31,9 @@ class ExampleRobolectricTest {
         override suspend fun deleteById(id: String) {
             state.value = state.value.filterNot { it.id == id }
         }
+        override suspend fun clearAll() {
+            state.value = emptyList()
+        }
     }
 
     private class FakeSyncOutboxDao : SyncOutboxDao {
